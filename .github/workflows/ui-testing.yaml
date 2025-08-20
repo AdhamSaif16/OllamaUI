@@ -57,6 +57,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest
         pip install selenium
+        pip install allure-pytest
         pip install -r requirements.txt
         
     - name: Install Chrome and ChromeDriver
