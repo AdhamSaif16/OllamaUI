@@ -92,6 +92,7 @@ jobs:
         SCREEN_HEIGHT: ${{ matrix.resolution.height }}
         OLLAMA_URL: http://52.31.176.203:3000/
         TEST_NAME: ${{ matrix.browser }}-${{ matrix.resolution.name }}
+        ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
       run: |
         mkdir -p allure-results
         # Run your tests here with unique result directory
