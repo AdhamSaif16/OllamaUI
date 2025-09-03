@@ -117,13 +117,6 @@ export default function Chat({ initialMessages, id, isMobile }: ChatProps) {
 
   return (
     <div className="flex flex-col w-full max-w-3xl h-full">
-      <ChatTopbar
-        isLoading={isLoading}
-        chatId={id}
-        messages={messages}
-        setMessages={setMessages}
-      />
-
       {messages.length === 0 ? (
         <div className="flex flex-col h-full w-full items-center gap-4 justify-center">
           <Image
