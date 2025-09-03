@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: predictions
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  yolo:
+    image: ${YOLO_IMAGE}
+    environment:
+      - DB_BACKEND=postgres
+      - DB_HOST=postgres
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - DB_NAME=predictions
+    depends_on:
+      - postgres
+    ports:
+      - "${YOLO_PORT}:8080"
+    volumes:
+      - ./uploads:/app/uploads
+
+  ollama-ui:
+    image: ${OLLAMA_UI_IMAGE}
+    environment:
+      - YOLO_SERVICE=yolo:${YOLO_PORT}
+    ports:
+      - "${OLLAMA_UI_PORT}:3000"
+
+    depends_on:
+      - yolo
+
+volumes:
+  pgdata:
