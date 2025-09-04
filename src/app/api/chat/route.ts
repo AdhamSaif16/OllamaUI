@@ -1,10 +1,12 @@
 // app/api/chat/route.ts
-//export const runtime = "nodejs";              // switched from "edge" to use AWS SDK
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { cookies } from "next/headers";
+import { randomUUID } from "crypto";
 
-/** Helpers **/
+/** ---------- helpers ---------- **/
 function guessExtFromContentType(ct?: string | null) {
   if (!ct) return "jpg";
   if (ct.includes("png")) return "png";
@@ -15,7 +17,6 @@ function guessExtFromContentType(ct?: string | null) {
 }
 
 function parseDataUrl(dataUrl: string): { buffer: Buffer; contentType: string } {
-  // data:[<mediatype>][;base64],<data>
   const match = /^data:(.+?);base64,(.*)$/.exec(dataUrl);
   if (!match) throw new Error("Unsupported data URL format.");
   const contentType = match[1];
@@ -32,40 +33,43 @@ async function fetchAsBuffer(url: string): Promise<{ buffer: Buffer; contentType
   return { buffer, contentType };
 }
 
-function getChatId(data: any, messages: any[]): string {
-  // Prefer explicit chat id if you pass it from your UI
-  return (
-    data?.chatId ||
-    data?.chat_id ||
-    messages?.[0]?.id ||
-    "anonymous"
-  ).toString();
+/**
+ * Decide the folder id for this chat.
+ * - If cookie "chatFolderId" exists → reuse (ongoing chat).
+ * - Else → create new folder name: YYYY-MM-DD-<short-random>, store in cookie.
+ */
+function resolveChatFolderId() {
+  const jar = cookies();
+  const existing = jar.get("chatFolderId")?.value;
+  if (existing) {
+    return { chatId: existing, setCookieHeader: undefined };
+  }
+
+  const today = new Date().toISOString().split("T")[0]; // e.g. 2025-09-04
+  const shortRand = randomUUID().split("-")[0];         // take first block of uuid
+  const folder = `${today}-${shortRand}`;
+
+  const maxAge = 60 * 60 * 24 * 90; // 90 days
+  const setCookie = `chatFolderId=${folder}; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
+  return { chatId: folder, setCookieHeader: setCookie };
 }
 
-
-/** S3 client (uses env + instance role or env creds) **/
-const s3 = new S3Client({
-  region: process.env.AWS_REGION,
-});
-
+/** ---------- S3/YOLO setup ---------- **/
+const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET = process.env.AWS_S3_BUCKET!;
-const YOLO = process.env.YOLO_SERVICE!; // e.g. "yolo:8080" (docker) or "localhost:8080" (local)
+const YOLO = process.env.YOLO_SERVICE!;
 
 export async function POST(req: Request) {
-  const { messages, selectedModel, data } = await req.json();
+  const { messages = [], selectedModel, data = {} } = await req.json();
 
-  // Remove experimental_attachments (kept from your original code)
-  const cleanedMessages = (messages || []).map((message: any) => {
-    const { experimental_attachments, ...cleanMessage } = message ?? {};
-    return cleanMessage;
-  });
+  const { chatId, setCookieHeader } = resolveChatFolderId();
 
   let message = "Please provide an image for object detection.";
 
   if (data?.images && data.images.length > 0) {
     try {
       const imageUrl = data.images[0] as string;
-      const chatId = getChatId(data, messages);
+
       let buffer: Buffer;
       let contentType: string | null = null;
 
@@ -81,20 +85,24 @@ export async function POST(req: Request) {
         throw new Error("Unsupported image source. Use a data URL or http(s) URL.");
       }
 
+      // upload to S3 under <chatId>/original/<timestamp>.<ext>
       const ext = guessExtFromContentType(contentType);
       const ts = Date.now();
       const key = `${chatId}/original/${ts}.${ext}`;
 
-      // Upload original image to S3
-      await s3.send(new PutObjectCommand({
-        Bucket: BUCKET,
-        Key: key,
-        Body: buffer,
-        ContentType: contentType || "image/jpeg",
-      }));
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: BUCKET,
+          Key: key,
+          Body: buffer,
+          ContentType: contentType || "image/jpeg",
+        })
+      );
 
-      // Call YOLO with the S3 key (no body needed; YOLO downloads from S3)
-      const yoloUrl = `http://${YOLO}/predict?img=${encodeURIComponent(key)}&chat_id=${encodeURIComponent(chatId)}`;
+      // call YOLO with that key + chat_id
+      const yoloUrl = `http://${YOLO}/predict?img=${encodeURIComponent(
+        key
+      )}&chat_id=${encodeURIComponent(chatId)}`;
       const predictionResponse = await fetch(yoloUrl, { method: "POST" });
 
       if (!predictionResponse.ok) {
@@ -104,7 +112,6 @@ export async function POST(req: Request) {
 
       const predictionResult = await predictionResponse.json();
 
-      // Build chat message (same style you had)
       message = `🔍 **Object Detection Results**
 
 **Detection Count:** ${predictionResult.detection_count}
@@ -112,7 +119,6 @@ export async function POST(req: Request) {
 **Prediction ID:** ${predictionResult.prediction_uid}
 
 I've analyzed your image and detected ${predictionResult.detection_count} object(s). The detected objects include: ${predictionResult.labels.join(", ")}.`;
-
     } catch (error) {
       console.error("Object detection error:", error);
       message = `❌ **Object Detection Error**
@@ -125,7 +131,7 @@ Please make sure the object detection service is reachable at http://${process.e
     }
   }
 
-  // Stream back (unchanged from your original approach)
+  // stream back
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {
@@ -141,25 +147,26 @@ Please make sure the object detection service is reachable at http://${process.e
             finishReason: "stop",
             usage: { promptTokens: 10, completionTokens: message.length },
             isContinued: false,
-          })}\n`,
-        ),
+          })}\n`
+        )
       );
       controller.enqueue(
         encoder.encode(
           `d:${JSON.stringify({
             finishReason: "stop",
             usage: { promptTokens: 10, completionTokens: message.length },
-          })}\n`,
-        ),
+          })}\n`
+        )
       );
       controller.close();
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "X-Vercel-AI-Data-Stream": "v1",
-    },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "text/plain; charset=utf-8",
+    "X-Vercel-AI-Data-Stream": "v1",
+  };
+  if (setCookieHeader) headers["Set-Cookie"] = setCookieHeader;
+
+  return new Response(stream, { headers });
 }
