@@ -40,3 +40,7 @@ next-env.d.ts
 
 #venv
 .venv
+
+/uploads/original/
+/uploads/predicted/
+/uploads/**/*
