@@ -26,16 +26,24 @@ services:
       - "${YOLO_PORT}:8080"
     volumes:
       - ./uploads:/app/uploads
+      - ~/.aws:/root/.aws:ro
+
 
   ollama-ui:
     image: ${OLLAMA_UI_IMAGE}
     environment:
       - YOLO_SERVICE=yolo:${YOLO_PORT}
+      - AWS_SDK_LOAD_CONFIG=1
+      - AWS_REGION=eu-west-1
+      - AWS_S3_BUCKET=adhamsaif16
+  
     ports:
       - "${OLLAMA_UI_PORT}:3000"
 
     depends_on:
       - yolo
+    volumes:
+      - ~/.aws:/root/.aws:ro
 
 volumes:
   pgdata:
