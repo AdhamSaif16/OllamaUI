@@ -2,7 +2,7 @@ name: E2E Testing (Deploy only)
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, master]
 
 jobs:
   deploy:
