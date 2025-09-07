@@ -48,6 +48,8 @@ jobs:
           docker compose down || true
 
           # Compose .env (uses your current values + new OllamaUI tag)
+          rm -f .env || true
+          umask 022
           cat > .env <<'EOF'
           # Images
           YOLO_IMAGE=${{ vars.YOLO_IMAGE }}
@@ -65,6 +67,9 @@ jobs:
           AWS_REGION=${{ vars.AWS_REGION || 'eu-west-1' }}
           AWS_S3_BUCKET=${{ vars.AWS_S3_BUCKET || 'adhamsaif16' }}
           EOF
+
+          #ensure ubuntu owns it and it’s readable
+          chmod 644 .env
 
           # Pull & start
           docker compose pull || true
