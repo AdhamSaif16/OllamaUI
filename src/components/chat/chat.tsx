@@ -56,7 +56,7 @@ export default function Chat({ initialMessages, id, isMobile }: ChatProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const base64Images = useChatStore((state) => state.base64Images);
   const setBase64Images = useChatStore((state) => state.setBase64Images);
-  const selectedModel = useChatStore((state) => state.selectedModel);
+  const selectedModel = useChatStore((state) => state.selectedModel) || 'gemma:2b';
   const saveMessages = useChatStore((state) => state.saveMessages);
   const getMessagesById = useChatStore((state) => state.getMessagesById);
   const router = useRouter();
@@ -64,11 +64,6 @@ export default function Chat({ initialMessages, id, isMobile }: ChatProps) {
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     window.history.replaceState({}, "", `/c/${id}`);
-
-    if (!selectedModel) {
-      toast.error("Please select a model");
-      return;
-    }
 
     const userMessage: Message = {
       id: generateId(),
@@ -117,6 +112,13 @@ export default function Chat({ initialMessages, id, isMobile }: ChatProps) {
 
   return (
     <div className="flex flex-col w-full max-w-3xl h-full">
+      {/* <ChatTopbar
+        isLoading={isLoading}
+        chatId={id}
+        messages={messages}
+        setMessages={setMessages}
+      /> */}
+
       {messages.length === 0 ? (
         <div className="flex flex-col h-full w-full items-center gap-4 justify-center">
           <Image
