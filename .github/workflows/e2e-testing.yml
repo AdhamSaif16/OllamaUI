@@ -74,6 +74,23 @@ jobs:
           chmod 644 compose.env
           chown ubuntu:ubuntu compose.env || true
           echo "compose.env ready:"; ls -l compose.env; head -n 6 compose.env || true
+          # --- FREE SPACE: prune unused Docker data (safe) ---
+          echo ">> Disk usage BEFORE prune"
+          docker system df || true
+
+          # Stop stack (already done just above, keep it)
+          docker compose down || true
+
+          # Remove stopped containers, dangling images, unused networks, and build cache
+          docker container prune -f || true
+          docker image prune -af || true
+          docker volume prune -f || true
+          docker builder prune -af || true
+          docker system prune -af || true
+
+          echo ">> Disk usage AFTER prune"
+          docker system df || true
+          # --- end cleanup ---
 
           # Show the resolved image (debug)
           docker compose --env-file ./compose.env config | grep -nE 'image:|services:|ollama-ui' || true
