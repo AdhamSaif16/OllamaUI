@@ -10,7 +10,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5432:5432"   # (optional to expose externally; safe to keep for now)
 
   yolo:
     image: adhamsaif16/yolo5tech:0.0.1
@@ -23,22 +23,25 @@ services:
     depends_on:
       - postgres
     ports:
-      - "8080:8080"
+
+      - "${YOLO_PORT:-8080}:8080"
+
     volumes:
       - ./uploads:/app/uploads
       - ~/.aws:/root/.aws:ro
 
-
   ollama-ui:
     image: adhamsaif16/ollama-ui:0.0.1
     environment:
+
       - YOLO_SERVICE=yolo:8080
+
       - AWS_SDK_LOAD_CONFIG=1
       - AWS_REGION=eu-west-1
       - AWS_S3_BUCKET=adhamsaif16
-  
     ports:
-      - "3000:3000"
+
+      - "${OLLAMA_UI_PORT:-3000}:3000"
 
     depends_on:
       - yolo
