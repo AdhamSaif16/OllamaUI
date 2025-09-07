@@ -75,9 +75,17 @@ jobs:
           chown ubuntu:ubuntu compose.env || true
           echo "compose.env ready:"; ls -l compose.env; head -n 6 compose.env || true
 
-          # Pull & start
-          docker compose pull || true
-          docker compose up -d
+          # Show the resolved image (debug)
+          docker compose --env-file ./compose.env config | grep -nE 'image:|services:|ollama-ui' || true
+
+          # Pull the exact images referenced by compose.env
+          docker compose --env-file ./compose.env pull || true
+
+          # Force-recreate only the UI service with the new tag (no deps restart)
+          docker compose --env-file ./compose.env up -d --force-recreate --no-deps ollama-ui
+
+          # Verify the running image tag
+          docker ps --format '{{.Names}}\t{{.Image}}' | grep ollama-ui || true
 
           # Basic health checks (adjust as needed)
           sleep 8
