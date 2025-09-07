@@ -95,6 +95,7 @@ jobs:
         OLLAMA_URL: http://${{ secrets.EC2_HOST }}:${{ vars.OLLAMA_UI_PORT || '3000' }}/
         TEST_NAME: ${{ matrix.browser }}-${{ matrix.resolution.name }}
         ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
+        WAIT_TIMEOUT: "10"
       run: |
         mkdir -p allure-results
         # Run your tests here with unique result directory
