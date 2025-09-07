@@ -68,8 +68,11 @@ jobs:
           AWS_S3_BUCKET=${{ vars.AWS_S3_BUCKET || 'adhamsaif16' }}
           EOF
 
-          #ensure ubuntu owns it and it’s readable
-          chmod 644 .env
+          chmod 644 compose.env
+          echo "== env file =="
+          ls -l compose.env
+          echo "===="
+          head -n 8 compose.env || true
 
           # Pull & start
           docker compose pull || true
