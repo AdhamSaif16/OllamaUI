@@ -47,10 +47,13 @@ jobs:
           # Stop previous stack (ignore if not running)
           docker compose down || true
 
-          # Compose .env (uses your current values + new OllamaUI tag)
-          rm -f .env || true
-          umask 022
-          cat > .env <<'EOF'
+           # HARD RESET: remove any problematic hidden .env (root-owned / immutable)
+          sudo chattr -i .env 2>/dev/null || true
+          sudo rm -f .env 2>/dev/null || true
+          # sanity: prove it's gone
+          [ -e .env ] && { echo ".env still present"; ls -la .env; exit 1; } || echo "No .env present"
+          cat > compose.env <<'EOF'
+
           # Images
           YOLO_IMAGE=${{ vars.YOLO_IMAGE }}
           OLLAMA_UI_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/ollama-ui:${{ env.IMAGE_TAG }}
@@ -69,10 +72,8 @@ jobs:
           EOF
 
           chmod 644 compose.env
-          echo "== env file =="
-          ls -l compose.env
-          echo "===="
-          head -n 8 compose.env || true
+          chown ubuntu:ubuntu compose.env || true
+          echo "compose.env ready:"; ls -l compose.env; head -n 6 compose.env || true
 
           # Pull & start
           docker compose pull || true
