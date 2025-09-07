@@ -92,7 +92,7 @@ jobs:
         BROWSER: ${{ matrix.browser }}
         SCREEN_WIDTH: ${{ matrix.resolution.width }}
         SCREEN_HEIGHT: ${{ matrix.resolution.height }}
-        OLLAMA_URL: http://52.31.176.203:3000/
+        OLLAMA_URL: http://${{ secrets.EC2_HOST }}:${{ vars.OLLAMA_UI_PORT || '3000' }}/
         TEST_NAME: ${{ matrix.browser }}-${{ matrix.resolution.name }}
         ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
       run: |
