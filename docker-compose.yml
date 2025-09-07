@@ -10,7 +10,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5432:5432"   # (optional to expose externally; safe to keep for now)
 
   yolo:
     image: ${YOLO_IMAGE}
@@ -23,23 +23,21 @@ services:
     depends_on:
       - postgres
     ports:
-      - "${YOLO_PORT}:8080"
+      - "${YOLO_PORT:-8080}:8080"
     volumes:
       - ./uploads:/app/uploads
       - ~/.aws:/root/.aws:ro
 
-
   ollama-ui:
     image: ${OLLAMA_UI_IMAGE}
     environment:
-      - YOLO_SERVICE=yolo:${YOLO_PORT}
+      # Inside the Docker network, always talk to yolo on its container port (8080)
+      - YOLO_SERVICE=http://yolo:8080
       - AWS_SDK_LOAD_CONFIG=1
       - AWS_REGION=eu-west-1
       - AWS_S3_BUCKET=adhamsaif16
-  
     ports:
-      - "${OLLAMA_UI_PORT}:3000"
-
+      - "${OLLAMA_UI_PORT:-3000}:3000"
     depends_on:
       - yolo
     volumes:

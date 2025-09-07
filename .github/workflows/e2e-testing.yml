@@ -1,0 +1,76 @@
+name: E2E Testing (Deploy only)
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build & push OllamaUI image
+      run: |
+        echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+        TAG="${{ github.sha }}-$(date +%Y%m%d-%H%M%S)"
+        docker build -t "${{ secrets.DOCKERHUB_USERNAME }}/ollama-ui:${TAG}" .
+        docker push "${{ secrets.DOCKERHUB_USERNAME }}/ollama-ui:${TAG}"
+        echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
+
+    - name: Copy docker-compose.yaml to EC2
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "docker-compose.yaml"
+        target: "/home/ubuntu/"
+
+    - name: Deploy on EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          set -euo pipefail
+          cd /home/ubuntu
+
+          # Optional DockerHub login (useful if repos are private)
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_PASSWORD }}" ]; then
+            echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          fi
+
+          # Stop previous stack (ignore if not running)
+          docker compose down || true
+
+          # Compose .env (uses your current values + new OllamaUI tag)
+          cat > .env <<'EOF'
+          # Images
+          YOLO_IMAGE=${{ vars.YOLO_IMAGE }}
+          OLLAMA_UI_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/ollama-ui:${{ env.IMAGE_TAG }}
+
+          # Ports
+          YOLO_PORT=${{ vars.YOLO_PORT || '8080' }}
+          OLLAMA_UI_PORT=${{ vars.OLLAMA_UI_PORT || '3000' }}
+
+          # Service URLs
+          YOLO_SERVICE=${{ vars.YOLO_SERVICE || 'http://yolo:8080' }}
+          OLLAMA_URL=${{ vars.OLLAMA_URL || 'http://localhost:11434' }}
+
+          # AWS config (mounted ~/.aws on EC2 will provide credentials)
+          AWS_REGION=${{ vars.AWS_REGION || 'eu-west-1' }}
+          AWS_S3_BUCKET=${{ vars.AWS_S3_BUCKET || 'adhamsaif16' }}
+          EOF
+
+          # Pull & start
+          docker compose pull || true
+          docker compose up -d
+
+          # Basic health checks (adjust as needed)
+          sleep 8
+          docker ps
+          curl -fsS http://localhost:${{ vars.OLLAMA_UI_PORT || '3000' }} >/dev/null || (echo "UI not responding" && exit 1)
