@@ -48,6 +48,8 @@ jobs:
           docker compose down || true
 
           # Compose .env (uses your current values + new OllamaUI tag)
+          rm -f .env || true
+          umask 022
           cat > .env <<'EOF'
           # Images
           YOLO_IMAGE=${{ vars.YOLO_IMAGE }}
@@ -67,7 +69,6 @@ jobs:
           EOF
 
           #ensure ubuntu owns it and it’s readable
-          sudo chown ubuntu:ubuntu .env
           chmod 644 .env
 
           # Pull & start
